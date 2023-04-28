@@ -184,14 +184,17 @@ class GameMaster:
         vote_result = { player.player_name: 0 for player in self.players }
         all_player_names = ",".join([player.player_name for player in self.players])
         self.log(f'上帝：请投票。请输出你要投票的玩家名字（{all_player_names}）或者输出"弃票"。')
+        player_votes = {}
         for player in self.players:
             player.receive_message(f'上帝', f'请投票。请输出你要投票的玩家名字（{all_player_names}）或者输出"弃票"。')
             vote = player.day_phase_vote()
             self.log(f'{player.player_name}：{vote}')
-            self.broadcast(f'{player.player_name} 投票结果：{vote}')
+            player_votes[player.player_name] = vote
             if vote == '弃票':
                 continue
             vote_result[vote] += 1
+        for player in self.players:
+            self.broadcast(f'{player.player_name} 投票结果：{vote}')
         self.log(f'上帝：投票结果为{vote_result}')
         self.broadcast(f'投票结果为{vote_result}')
         max_vote = max(vote_result.values())
