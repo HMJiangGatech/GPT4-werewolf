@@ -6,6 +6,7 @@ GPT4 One night ultimate werewolf GPT4一夜狼人
 You can tune `TOTAL_ROUNDS`, `char_prompt` of bots, or the message from game master `player.recieve_message(f'上帝', f'请{player.player_name}发言。记住你晚上的信息是"{player.night_action}"。根据别人的信息，如果你觉得你是狼人，请想办法归票到别人身上。如果你觉得你不是狼人，请想办法归票到狼人身上。')` to make the game more interesting.
 
 Set `INCLUDE_PEOPLE` to `True` to play with AI by yourself.
+Set `INCLUDE_PEOPLE` to `False` to let AI simulate the game.
 
 ## A 2-round Play Example
 
