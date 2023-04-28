@@ -194,7 +194,7 @@ class GameMaster:
                 continue
             vote_result[vote] += 1
         for player in self.players:
-            self.broadcast(f'{player.player_name} 投票结果：{vote}')
+            self.broadcast(f'{player.player_name} 投票结果：{player_votes[player.player_name]}')
         self.log(f'上帝：投票结果为{vote_result}')
         self.broadcast(f'投票结果为{vote_result}')
         max_vote = max(vote_result.values())
