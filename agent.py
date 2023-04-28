@@ -86,6 +86,7 @@ GAME_PROMPT = """
 BOT_NAMES = [
     'Alice', 'Bob', 'Charlie', 'David', 'Eve', 'Fred', 'Ginny', 'Harriet', 'Ileana', 'Joseph',
 ]
+TOTAL_ROUNDS = 2
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 if not OPENAI_API_KEY:
@@ -151,7 +152,7 @@ class GameMaster:
 
     def day_phase(self):
         # 讨论阶段
-        total_rounds = 2
+        total_rounds = TOTAL_ROUNDS
         for player in self.players:
             player.recieve_message(f'上帝', '天亮了，所有人睁眼！请大家开始讨论。讨论时间为{total_rounds}轮。')
         print('\n'.join(self.game_history))
@@ -159,7 +160,7 @@ class GameMaster:
         self.game_history.append(f'上帝：天亮了，所有人睁眼！请大家开始讨论。讨论时间为{total_rounds}轮。')
         for _ in range(total_rounds):
             for player in self.players:
-                player.recieve_message(f'上帝', f'请{player.player_name}发言。记住你晚上的信息是"{player.night_action}"。')
+                player.recieve_message(f'上帝', f'请{player.player_name}发言。记住你晚上的信息是"{player.night_action}"。根据别人的信息，如果你觉得你是狼人，请想办法归票到别人身上。如果你觉得你不是狼人，请想办法归票到狼人身上。')
                 message = player.day_phase_discussion()
                 for other_player in player.other_players:
                     other_player.recieve_message(player.player_name, message)
@@ -182,17 +183,42 @@ class GameMaster:
             vote_result[vote] += 1
         print(f'上帝：投票结果为{vote_result}')
         self.game_history.append(f'上帝：投票结果为{vote_result}')
-
+        max_vote = max(vote_result.values())
+        max_vote_players = [player_name for player_name, vote in vote_result.items() if vote == max_vote]
+        if len(max_vote_players) == 1:
+            _dead_player = [player for player in self.players if player.player_name == max_vote_players[0]][0]
+            _dead_role = _dead_player.role
+            print(f'上帝：{max_vote_players[0]}被投票出局。他的身份是{_dead_role}。')
+            self.game_history.append(f'上帝：{max_vote_players[0]}被投票出局。他的身份是{_dead_role}。')
+            if _dead_role in ['狼人']:
+                print(f'上帝：好人阵营胜利。')
+                self.game_history.append(f'上帝：好人阵营胜利。')
+            else:
+                print(f'上帝：狼人阵营胜利。')
+                self.game_history.append(f'上帝：狼人阵营胜利。')
+        else:
+            print(f'上帝：平票，无人出局。')
+            self.game_history.append(f'上帝：平票，无人出局。')
+            if any([player.role == '狼人' for player in self.players]):
+                print(f'上帝：狼人阵营胜利。')
+                self.game_history.append(f'上帝：狼人阵营胜利。')
+            else:
+                print(f'上帝：好人阵营胜利。')
+                self.game_history.append(f'上帝：好人阵营胜利。')
         
-        completion = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-            {'role': "system", "content": '\n'.join(self.game_history)},
-            {'role': "user", "content": '现在你是上帝，你要做的是判断胜负。请你根据上面的对话，判断狼人是否胜利。如果狼人胜利，请输出"狼人胜利"，如果好人胜利，请输出"好人胜利"。'},
-            ]
-        )
-        print("=======================================================")
-        print(completion.choices[0]['message']['content'])
+        # completion = openai.ChatCompletion.create(
+        #     model="gpt-4",
+        #     messages=[
+        #     {'role': "system", "content": '\n'.join(self.game_history)},
+        #     {'role': "user", "content": '现在你是上帝，你要做的是判断胜负。请你根据上面的对话，判断狼人是否胜利。如果狼人胜利，请输出"狼人胜利"，如果好人胜利，请输出"好人胜利"。并给出分析理由。'},
+        #     ]
+        # )
+        # print("=======================================================")
+        # print("=======================================================")
+        # print("=======================================================")
+        # print("=======================================================")
+        # print("完整历史：")
+        # print('\n'.join(self.game_history))
 
 class PlayerBot:
     def __init__(self, player_id):
@@ -254,7 +280,9 @@ class PlayerBot:
                 break
         if '弃票' in vote or '不投' in vote or '不选' in vote or '不投票' in vote or '弃权' in vote or vote.strip() == '':
             vote = '弃票'
-        assert vote in [player.player_name for player in self.other_players] or vote == self.player_name or vote == '弃票', f'玩家{self.player_name}的投票{vote}不合法 (msg: {msg})'
+        if not (vote in [player.player_name for player in self.other_players] or vote == self.player_name or vote == '弃票'):
+            print(f'玩家{self.player_name}的投票{vote}不合法 (msg: {msg}) 默认弃票')
+            vote = '弃票'
         return vote
 
     def perform_night_action(self, players, center_cards):
