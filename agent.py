@@ -290,19 +290,19 @@ class PlayerBot:
 
     def perform_night_action(self, players, center_cards):
         # 根据角色执行夜晚的动作，这里仅实现部分角色，其他角色可以类似实现
-        if self.role == '狼人':
+        if self.start_role == '狼人':
             self.werewolf_action(players, center_cards)
-        elif self.role == '爪牙':
+        elif self.start_role == '爪牙':
             self.minion_action(players)
-        elif self.role == '预言家':
+        elif self.start_role == '预言家':
             self.seer_action(players, center_cards)
-        elif self.role == '强盗':
+        elif self.start_role == '强盗':
             self.robber_action(players)
-        elif self.role == '捣蛋鬼':
+        elif self.start_role == '捣蛋鬼':
             self.troublemaker_action(players)
-        elif self.role == '酒鬼':
+        elif self.start_role == '酒鬼':
             self.drunk_action(center_cards)
-        elif self.role == '失眠者':
+        elif self.start_role == '失眠者':
             self.insomniac_action()
 
     def werewolf_action(self, players, center_cards, card_id=None):
