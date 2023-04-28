@@ -2,6 +2,21 @@ import random
 import openai
 import os
 
+BOT_NAMES = [
+    'Alice', 'Bob', 'Charlie', 'David', 'Eve', 'Fred', 'Ginny', 'Harriet', 'Ileana', 'Joseph',
+]
+TOTAL_ROUNDS = 3
+INCLUDE_PEOPLE = True
+OPENAI_MODEL = "gpt-4"
+
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+if not OPENAI_API_KEY:
+    # read from file
+    with open('OPENAI_API_KEY', 'r') as f:
+        OPENAI_API_KEY = f.read().strip()
+
+openai.api_key = OPENAI_API_KEY
+
 GAME_PROMPT = """
 # 一夜狼人的规则
 
@@ -83,26 +98,28 @@ GAME_PROMPT = """
 ========================
 """.strip()
 
-BOT_NAMES = [
-    'Alice', 'Bob', 'Charlie', 'David', 'Eve', 'Fred', 'Ginny', 'Harriet', 'Ileana', 'Joseph',
-]
-TOTAL_ROUNDS = 2
-
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-if not OPENAI_API_KEY:
-    # read from file
-    with open('OPENAI_API_KEY', 'r') as f:
-        OPENAI_API_KEY = f.read().strip()
-
-openai.api_key = OPENAI_API_KEY
 
 class GameMaster:
-    def __init__(self, num_players):
+    def __init__(self, num_players, verbose=True, include_people=True):
         self.num_players = num_players
         self.players = [PlayerBot(i) for i in range(self.num_players)]
+        if include_people:
+            _id = random.randint(0, len(self.players) - 1)
+            self.players[_id] = PersonPlayer(_id)
+            verbose = False
         self.roles = []
         self.center_cards = []
         self.game_history = []
+        self.verbose = verbose
+
+    def log(self, msg):
+        if self.verbose:
+            print(msg)
+        self.game_history.append(msg)
+
+    def broadcast(self, msg):
+        for player in self.players:
+            player.receive_message("上帝", msg)
 
     def setup_game(self):
         # 根据玩家数量选择角色并洗牌
@@ -116,12 +133,10 @@ class GameMaster:
 
         # 设置中央牌堆
         self.center_cards = self.roles[-3:]
-        self.game_history = [
-            GAME_PROMPT,
-            f"游戏开始，玩家数量：{self.num_players}，角色：{self.roles}",
-        ]
+        self.log(GAME_PROMPT)
+        self.log(f"游戏开始，玩家数量：{self.num_players}，角色：{self.roles}")
         for player in self.players:
-            self.game_history.append(f"{player.player_name}的初始身份是{player.start_role}。")
+            self.log(f"{player.player_name}的初始身份是{player.start_role}。")
 
     def select_roles(self, num_players):
         assert num_players == 5
@@ -131,11 +146,11 @@ class GameMaster:
         return roles 
 
     def play_game(self):
-        self.game_history.append('========================')
+        self.log('========================')
         self.night_phase()
-        self.game_history.append('========================')
+        self.log('========================')
         self.day_phase()
-        self.game_history.append('========================')
+        self.log('========================')
         self.game_end()
 
     def night_phase(self):
@@ -144,81 +159,66 @@ class GameMaster:
             for player in self.players:
                 if player.start_role == role:
                     player.perform_night_action(self.players, self.center_cards)
-                    self.game_history.append(f'{player.player_name}的初始身份是{player.start_role}，夜晚他得到的信息是"{player.night_action}"。')
+                    self.log(f'{player.player_name}的初始身份是{player.start_role}，夜晚他得到的信息是"{player.night_action}"。')
 
-        self.game_history.append('夜晚结束')
+        self.log('夜晚结束')
         for player in self.players:
-            self.game_history.append(f'{player.player_name}的初始身份是{player.start_role}，现在的身份是{player.role}。')
+            self.log(f'{player.player_name}的初始身份是{player.start_role}，现在的身份是{player.role}。')
 
     def day_phase(self):
         # 讨论阶段
         total_rounds = TOTAL_ROUNDS
         for player in self.players:
-            player.recieve_message(f'上帝', '天亮了，所有人睁眼！请大家开始讨论。讨论时间为{total_rounds}轮。')
-        print('\n'.join(self.game_history))
-        print(f'上帝：天亮了，所有人睁眼！请大家开始讨论。讨论时间为{total_rounds}轮。')
-        self.game_history.append(f'上帝：天亮了，所有人睁眼！请大家开始讨论。讨论时间为{total_rounds}轮。')
+            player.receive_message(f'上帝', f'天亮了，所有人睁眼！请大家开始讨论。讨论时间为{total_rounds}轮。')
+        self.log(f'上帝：天亮了，所有人睁眼！请大家开始讨论。讨论时间为{total_rounds}轮。')
         for _ in range(total_rounds):
             for player in self.players:
-                player.recieve_message(f'上帝', f'请{player.player_name}发言。记住你晚上的信息是"{player.night_action}"。根据别人的信息，如果你觉得你是狼人，请想办法归票到别人身上。如果你觉得你不是狼人，请想办法归票到狼人身上。')
+                player.receive_message(f'上帝', f'请{player.player_name}发言。记住你晚上的信息是"{player.night_action}"。根据别人的信息，如果你觉得你是狼人，不要轻易说自己是狼人，请想办法归票到别人身上。如果你觉得你不是狼人，请想办法归票到狼人身上。')
                 message = player.day_phase_discussion()
                 for other_player in player.other_players:
-                    other_player.recieve_message(player.player_name, message)
-                print(f'{player.player_name}：{message}')
-                self.game_history.append(f'{player.player_name}：{message}')
+                    other_player.receive_message(player.player_name, message)
+                self.log(f'{player.player_name}：{message}')
 
     def game_end(self):
         # 游戏结束时的统计和判断胜负
         vote_result = { player.player_name: 0 for player in self.players }
         all_player_names = ",".join([player.player_name for player in self.players])
-        print(f'上帝', f'请投票。请输出你要投票的玩家名字（{all_player_names}）或者输出"弃票"。')
-        self.game_history.append(f'上帝：请投票。请输出你要投票的玩家名字（{all_player_names}）或者输出"弃票"。')
+        self.log(f'上帝：请投票。请输出你要投票的玩家名字（{all_player_names}）或者输出"弃票"。')
         for player in self.players:
-            player.recieve_message(f'上帝', f'请投票。请输出你要投票的玩家名字（{all_player_names}）或者输出"弃票"。')
+            player.receive_message(f'上帝', f'请投票。请输出你要投票的玩家名字（{all_player_names}）或者输出"弃票"。')
             vote = player.day_phase_vote()
-            print(f'{player.player_name}：{vote}')
-            self.game_history.append(f'{player.player_name}：{vote}')
+            self.log(f'{player.player_name}：{vote}')
+            self.broadcast(f'{player.player_name} 投票结果：{vote}')
             if vote == '弃票':
                 continue
             vote_result[vote] += 1
-        print(f'上帝：投票结果为{vote_result}')
-        self.game_history.append(f'上帝：投票结果为{vote_result}')
+        self.log(f'上帝：投票结果为{vote_result}')
+        self.broadcast(f'投票结果为{vote_result}')
         max_vote = max(vote_result.values())
         max_vote_players = [player_name for player_name, vote in vote_result.items() if vote == max_vote]
         if len(max_vote_players) == 1:
             _dead_player = [player for player in self.players if player.player_name == max_vote_players[0]][0]
             _dead_role = _dead_player.role
-            print(f'上帝：{max_vote_players[0]}被投票出局。他的身份是{_dead_role}。')
-            self.game_history.append(f'上帝：{max_vote_players[0]}被投票出局。他的身份是{_dead_role}。')
+            self.log(f'上帝：{max_vote_players[0]}被投票出局。他的身份是{_dead_role}。')
+            self.broadcast(f'{max_vote_players[0]}被投票出局。他的身份是{_dead_role}。')
             if _dead_role in ['狼人']:
-                print(f'上帝：好人阵营胜利。')
-                self.game_history.append(f'上帝：好人阵营胜利。')
+                self.log(f'上帝：好人阵营胜利。')
+                self.broadcast(f'好人阵营胜利。')
             else:
-                print(f'上帝：狼人阵营胜利。')
-                self.game_history.append(f'上帝：狼人阵营胜利。')
+                self.log(f'上帝：狼人阵营胜利。')
+                self.broadcast(f'狼人阵营胜利。')
         else:
-            print(f'上帝：平票，无人出局。')
-            self.game_history.append(f'上帝：平票，无人出局。')
+            self.log(f'上帝：平票，无人出局。')
+            self.broadcast(f'平票，无人出局。')
             if any([player.role == '狼人' for player in self.players]):
-                print(f'上帝：狼人阵营胜利。')
-                self.game_history.append(f'上帝：狼人阵营胜利。')
+                self.log(f'上帝：狼人阵营胜利。')
+                self.broadcast(f'狼人阵营胜利。')
             else:
-                print(f'上帝：好人阵营胜利。')
-                self.game_history.append(f'上帝：好人阵营胜利。')
-        
-        # completion = openai.ChatCompletion.create(
-        #     model="gpt-4",
-        #     messages=[
-        #     {'role': "system", "content": '\n'.join(self.game_history)},
-        #     {'role': "user", "content": '现在你是上帝，你要做的是判断胜负。请你根据上面的对话，判断狼人是否胜利。如果狼人胜利，请输出"狼人胜利"，如果好人胜利，请输出"好人胜利"。并给出分析理由。'},
-        #     ]
-        # )
-        # print("=======================================================")
-        # print("=======================================================")
-        # print("=======================================================")
-        # print("=======================================================")
-        # print("完整历史：")
-        # print('\n'.join(self.game_history))
+                self.log(f'上帝：好人阵营胜利。')
+                self.broadcast(f'好人阵营胜利。')
+
+        self.broadcast('\n\n' + '\n'.join(self.game_history) + '\n\n')
+
 
 class PlayerBot:
     def __init__(self, player_id):
@@ -248,7 +248,7 @@ class PlayerBot:
     def context(self):
         return f'{GAME_PROMPT}\n你的名字是 {self.player_name}. 你的编号是 {self.player_id}. 和你一起游戏的还有 {len(self.other_players)} 位玩家，他们是 {", ".join([player.player_name for player in self.other_players])}. \n你开始的角色是 {self.start_role}. \n在晚上你干了, \n{self.night_action}.\n白天时你将收到别的玩家的讨论如"玩家名：发言"。轮到你发言的时候不需要带你的名字，请直接发言。你的个人特质是{self.char_prompt}\n'
 
-    def recieve_message(self, player_name, message):
+    def receive_message(self, player_name, message):
         self.chat_history.append({
             'role': 'user',
             'content': f"{player_name}: {message}"
@@ -256,7 +256,7 @@ class PlayerBot:
     
     def day_phase_discussion(self):
         completion = openai.ChatCompletion.create(
-            model="gpt-4",
+            model=OPENAI_MODEL,
             messages=self.chat_history,
         )
         chatbot_resposne = completion.choices[0]['message']['content']
@@ -302,14 +302,17 @@ class PlayerBot:
         elif self.role == '失眠者':
             self.insomniac_action()
 
-    def werewolf_action(self, players, center_cards):
+    def werewolf_action(self, players, center_cards, card_id=None):
         # 狼人查看其他狼人
         other_werewolves = [player for player in players if player.role == '狼人' and player.player_id != self.player_id]
         if other_werewolves:
             self.night_action = f'狼人请睁眼，你的同伴是 {other_werewolves[0].player_name}.'
         else:
             self.night_action = '狼人请睁眼，你是唯一的狼人. 请查看中央区域的一张牌，可以从左中右中选择一张.'
-            _card_id = random.randint(0, 2)
+            if card_id is None:
+                _card_id = random.randint(0, 2)
+            else:
+                _card_id = card_id
             _card_pos = ['左', '中', '右'][_card_id]
             self.night_action += f' 你查看了中央区域的第 {_card_id + 1} 张牌 （{_card_pos}）. 你看到的是 {center_cards[_card_id]}.'
 
@@ -323,53 +326,80 @@ class PlayerBot:
         else:
             self.night_action = '爪牙请睁眼，场面上没有狼人.'
 
-    def seer_action(self, players, center_cards):
+    def seer_action(self, players, center_cards, choice=None, player_id=None, card_id_1=None, card_id_2=None):
         # 预言家查看一位玩家的身份牌或中央区域的两张牌
-        _choice = random.randint(0, 1)
+        if choice is None:
+            _choice = random.randint(0, 1)
+        else:
+            _choice = choice
         if _choice == 0:
             # 查看一位玩家的身份牌
-            _player_id = random.randint(0, len(players) - 1)
-            while players[_player_id].player_id == self.player_id:
+            if player_id is None:
                 _player_id = random.randint(0, len(players) - 1)
+                while players[_player_id].player_id == self.player_id:
+                    _player_id = random.randint(0, len(players) - 1)
+            else:
+                _player_id = player_id
             self.night_action = f'预言家请睁眼，你查看了 {players[_player_id].player_name} 的身份牌，他是 {players[_player_id].role}.'
         else:
             # 查看中央区域的两张牌
-            _card_id_1 = random.randint(0, 2)
-            _card_id_2 = random.randint(0, 2)
-            while _card_id_2 == _card_id_1:
+            if card_id_1 is None:
+                _card_id_1 = random.randint(0, 2)
+            else:
+                _card_id_1 = card_id_1
+            if card_id_2 is None:
                 _card_id_2 = random.randint(0, 2)
+                while _card_id_2 == _card_id_1:
+                    _card_id_2 = random.randint(0, 2)
+            else:
+                _card_id_2 = card_id_2
             _card_pos_1 = ['左', '中', '右'][_card_id_1]
             _card_pos_2 = ['左', '中', '右'][_card_id_2]
             self.night_action = f'预言家请睁眼，你查看了中央区域的第 {_card_id_1 + 1} 张牌 （{_card_pos_1}）和第 {_card_id_2 + 1} 张牌 （{_card_pos_2}）. 你看到的是 {_card_pos_1} 是 {center_cards[_card_id_1]}, {_card_pos_2} 是 {center_cards[_card_id_2]}.'
 
-    def robber_action(self, players):
+    def robber_action(self, players, choice=None, player_id=None):
         # 强盗与另一位玩家交换身份牌
-        _choice = random.randint(0, 1)
+        if choice is None:
+            _choice = random.randint(0, 1)
+        else:
+            _choice = choice
         if _choice == 0:
             # 不交换
             self.night_action = '强盗请睁眼，你没有交换身份牌.'
         else:
             # 交换
-            _player_id = random.randint(0, len(players) - 1)
-            while players[_player_id].player_id == self.player_id:
+            if player_id is not None:
+                _player_id = player_id
+            else:
                 _player_id = random.randint(0, len(players) - 1)
+                while players[_player_id].player_id == self.player_id:
+                    _player_id = random.randint(0, len(players) - 1)
             self.night_action = f'强盗请睁眼，你交换了 {players[_player_id].player_name} 的身份牌，他是 {players[_player_id].role}.现在你是 {players[_player_id].role}， {players[_player_id].player_name} 是 {self.role}.'
             players[_player_id].role, self.role = self.role, players[_player_id].role
 
-    def troublemaker_action(self, players):
+    def troublemaker_action(self, players, player_id_1=None, player_id_2=None):
         # 捣蛋鬼交换两位其他玩家的身份牌
-        _player_id_1 = random.randint(0, len(players) - 1)
-        while players[_player_id_1].player_id == self.player_id:
+        if player_id_1 is not None and player_id_2 is not None:
+            _player_id_1 = player_id_1
+            _player_id_2 = player_id_2
+            assert _player_id_1 != _player_id_2, '捣蛋鬼不能交换同一位玩家的身份牌.'
+        else:
             _player_id_1 = random.randint(0, len(players) - 1)
-        _player_id_2 = random.randint(0, len(players) - 1)
-        while players[_player_id_2].player_id == self.player_id or players[_player_id_2].player_id == players[_player_id_1].player_id:
+            while players[_player_id_1].player_id == self.player_id:
+                _player_id_1 = random.randint(0, len(players) - 1)
             _player_id_2 = random.randint(0, len(players) - 1)
+            while players[_player_id_2].player_id == self.player_id or players[_player_id_2].player_id == players[_player_id_1].player_id:
+                _player_id_2 = random.randint(0, len(players) - 1)
         self.night_action = f'捣蛋鬼请睁眼，你交换了 {players[_player_id_1].player_name} 和 {players[_player_id_2].player_name} 的身份牌.'
         players[_player_id_1].role, players[_player_id_2].role = players[_player_id_2].role, players[_player_id_1].role
 
-    def drunk_action(self, center_cards):
+    def drunk_action(self, center_cards, card_id=None):
         # 酒鬼将自己的身份牌与中央区域的一张牌交换
-        _card_id = random.randint(0, 2)
+        if card_id is not None:
+            _card_id = card_id
+            assert _card_id in [0, 1, 2]
+        else:
+            _card_id = random.randint(0, 2)
         _card_pos = ['左', '中', '右'][_card_id]
         self.night_action = f'酒鬼请睁眼，你交换了自己的身份牌和中央区域的第 {_card_id + 1} 张牌 （{_card_pos}）. '
         self.role, center_cards[_card_id] = center_cards[_card_id], self.role
@@ -378,7 +408,183 @@ class PlayerBot:
         # 失眠者查看自己的身份牌
         self.night_action = f'失眠者请睁眼，你现在是 {self.role}.'
 
+class PersonPlayer(PlayerBot):
+    def __init__(self, player_id):
+        super().__init__(player_id)
+        self.log(f"玩家 {self.player_name} 加入游戏.")
+        self.log(f"你是第 {self.player_id} 位玩家.")
+
+    def log(self, msg):
+        print(msg)
+
+    def set_role(self, role):
+        self.log(f"你的身份是 {role}.")
+        return super().set_role(role)
+    
+    def match_players(self, players):
+        self.log(f"场上有 {len(players)} 位玩家.")
+        for player in players:
+            self.log(f"玩家 {player.player_id}: {player.player_name}")
+        super().match_players(players)
+
+    def receive_message(self, player_name, message):
+        self.log(f"玩家 {player_name} 说: {message}")
+        super().receive_message(player_name, message)
+
+    def day_phase_discussion(self):
+        resposne = input("请输入你的发言: ")
+        return resposne
+    
+    def day_phase_vote(self):
+        resposne = input("请输入你的投票目标: ")
+        return resposne
+    
+    def perform_night_action(self, players, center_cards):
+        self.log("轮到你行动了.")
+        super().perform_night_action(players, center_cards)
+
+    def werewolf_action(self, players, center_cards):
+        self.log("你是狼人，你可以看到其他狼人的身份.")
+        for player in players:
+            if player.role == '狼人' and player.player_id != self.player_id:
+                self.log(f"玩家 {player.player_id}: {player.player_name} 是狼人.")
+                self.night_action = f'狼人请睁眼，你的同伴是 {player.player_name}.'
+        
+        if len([player for player in players if player.role == '狼人' and player.player_id != self.player_id]) == 0:
+            self.log("你是唯一的狼人. 请查看中央区域的一张牌，可以从左中右中选择一张.")
+            self.night_action = '狼人请睁眼，你是唯一的狼人. 请查看中央区域的一张牌，可以从左中右中选择一张.'
+            while True:
+                _card_id = input("请输入你要查看的牌的编号: ")
+                try:
+                    _card_id = int(_card_id)
+                    assert _card_id in [0, 1, 2]
+                    break
+                except:
+                    self.log("请输入正确的编号.")
+            _card_pos = ['左', '中', '右'][_card_id]
+            self.log(f"你查看了中央区域的第 {_card_id + 1} 张牌 （{_card_pos}）. ")
+            self.night_action = f'狼人请睁眼，你查看了中央区域的第 {_card_id + 1} 张牌 （{_card_pos}）. '
+            self.log(f"第 {_card_id + 1} 张牌是 {center_cards[_card_id]}.")
+            self.night_action = f'狼人请睁眼，第 {_card_id + 1} 张牌是 {center_cards[_card_id]}.'
+
+    def minion_action(self, players):
+        super().minion_action(players)
+        self.log(self.night_action)
+
+    def seer_action(self, players, center_cards):
+        self.log("你是预言家，你可以查看一位玩家或者两张中央区域的牌.")
+        while True:
+            _choice = input("请输入你的选择（0:玩家/1:中央区域）: ")
+            try:
+                _choice = int(_choice)
+                assert _choice in [0, 1]
+                break
+            except:
+                self.log("请输入正确的选择.")
+        if _choice == 0:
+            while True:
+                _player_id = input("请输入你要查看的玩家的编号: ")
+                try:
+                    _player_id = int(_player_id)
+                    assert _player_id in range(len(players)) and _player_id != self.player_id
+                    break
+                except:
+                    self.log("请输入正确的编号.")
+            self.log(f"玩家 {_player_id}: {players[_player_id].player_name} 的身份是 {players[_player_id].role}.")
+            self.night_action = f'预言家请睁眼，玩家 {_player_id}: {players[_player_id].player_name} 的身份是 {players[_player_id].role}.'
+        else:
+            while True:
+                _card_id_1 = input("请输入你要查看的第一张牌的编号: ")
+                try:
+                    _card_id_1 = int(_card_id_1)
+                    assert _card_id_1 in [0, 1, 2]
+                    break
+                except:
+                    self.log("请输入正确的编号.")
+            _card_pos_1 = ['左', '中', '右'][_card_id_1]
+            self.log(f"你查看了中央区域的第 {_card_id_1 + 1} 张牌 （{_card_pos_1}）. ")
+            self.log(f"第 {_card_id_1 + 1} 张牌是 {center_cards[_card_id_1]}.")
+            
+            while True:
+                _card_id_2 = input("请输入你要查看的第二张牌的编号: ")
+                try:
+                    _card_id_2 = int(_card_id_2)
+                    assert _card_id_2 in [0, 1, 2] and _card_id_2 != _card_id_1
+                    break
+                except:
+                    self.log("请输入正确的编号.")
+            _card_pos_2 = ['左', '中', '右'][_card_id_2]
+            self.log(f"你查看了中央区域的第 {_card_id_2 + 1} 张牌 （{_card_pos_2}）. ")
+            self.log(f"第 {_card_id_2 + 1} 张牌是 {center_cards[_card_id_2]}.")
+
+            self.night_action = f'预言家请睁眼，你查看了中央区域的第 {_card_id_1 + 1} 张牌是 {center_cards[_card_id_1]}, 第 {_card_id_2 + 1} 张牌是 {center_cards[_card_id_2]}.'
+
+    def robber_action(self, players):
+        self.log("你是强盗，你可以查看一位玩家的身份，并且和他交换身份. 你也可以选择不交换.")
+        while True:
+            _choice = input("请输入你的选择（0:不交换/1:交换）: ")
+            try:
+                _choice = int(_choice)
+                assert _choice in [0, 1]
+                break
+            except:
+                self.log("请输入正确的选择.")
+        if _choice == 0:
+            self.log("你选择了不交换.")
+            self.night_action = f'强盗请睁眼，你选择了不交换.'
+        else:
+            while True:
+                _player_id = input("请输入你要交换的玩家的编号: ")
+                try:
+                    _player_id = int(_player_id)
+                    assert _player_id in range(len(players)) and _player_id != self.player_id
+                    break
+                except:
+                    self.log("请输入正确的编号.")
+            self.log(f"玩家 {_player_id}: {players[_player_id].player_name} 的身份是 {players[_player_id].role}.")
+            self.log(f"你交换了 {players[_player_id].player_name} 的身份牌，他是 {players[_player_id].role}.现在你是 {players[_player_id].role}， {players[_player_id].player_name} 是 {self.role}.")
+            self.night_action = f'强盗请睁眼，你交换了 {players[_player_id].player_name} 的身份牌，他是 {players[_player_id].role}.现在你是 {players[_player_id].role}， {players[_player_id].player_name} 是 {self.role}.'
+            players[_player_id].role, self.role = self.role, players[_player_id].role
+
+    def troublemaker_action(self, players):
+        self.log("你是捣蛋鬼，你可以选择交换两位其他玩家的身份牌.")
+        while True:
+            _player_id_1 = input("请输入你要交换的第一位玩家的编号: ")
+            try:
+                _player_id_1 = int(_player_id_1)
+                assert _player_id_1 in range(len(players)) and _player_id_1 != self.player_id
+                break
+            except:
+                self.log("请输入正确的编号.")
+        while True:
+            _player_id_2 = input("请输入你要交换的第二位玩家的编号: ")
+            try:
+                _player_id_2 = int(_player_id_2)
+                assert _player_id_2 in range(len(players)) and _player_id_2 != self.player_id and _player_id_2 != _player_id_1
+                break
+            except:
+                self.log("请输入正确的编号.")
+        super().troublemaker_action(players, player_id_1=_player_id_1, player_id_2=_player_id_2)
+        self.log(f"你交换了玩家 {_player_id_1} 和 {_player_id_2} 的身份牌.")
+
+    def drunk_action(self, center_cards):
+        self.log("你是酒鬼，你可以选择交换自己的身份牌和中央区域的一张牌.")
+        while True:
+            _card_id = input("请输入你要交换的牌的编号（0, 1, 2）: ")
+            try:
+                _card_id = int(_card_id)
+                assert _card_id in [0, 1, 2]
+                break
+            except:
+                self.log("请输入正确的编号.")
+        super().drunk_action(center_cards, card_id=_card_id)
+        self.log(f"你交换了自己的身份牌和中央区域的第 {_card_id + 1} 张牌.")
+
+    def insomniac_action(self):
+        super().insomniac_action()
+        self.log(self.night_action)
+
 if __name__ == '__main__':
-    gm = GameMaster(5)
+    gm = GameMaster(5, include_people=INCLUDE_PEOPLE)
     gm.setup_game()
     gm.play_game()
