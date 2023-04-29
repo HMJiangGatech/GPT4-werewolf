@@ -1,6 +1,7 @@
 import random
 import openai
 import os
+from colorama import Fore, Style
 
 BOT_NAMES = [
     'Alice', 'Bob', 'Charlie', 'David', 'Eve', 'Fred', 'Ginny', 'Harriet', 'Ileana', 'Joseph',
@@ -432,15 +433,15 @@ class PersonPlayer(PlayerBot):
         super().match_players(players)
 
     def receive_message(self, player_name, message):
-        self.log(f"玩家 {player_name} 说: {message}")
+        self.log(f"{Fore.RED}玩家 {player_name} 说:{Style.RESET_ALL} {message}")
         super().receive_message(player_name, message)
 
     def day_phase_discussion(self):
-        resposne = input("请输入你的发言: ")
+        resposne = input(Fore.BLUE + "请输入你的发言: ")
         return resposne
     
     def day_phase_vote(self):
-        resposne = input("请输入你的投票目标: ")
+        resposne = input(Fore.BLUE + "请输入你的投票目标: ")
         return resposne
     
     def perform_night_action(self, players, center_cards):
@@ -458,7 +459,7 @@ class PersonPlayer(PlayerBot):
             self.log("你是唯一的狼人. 请查看中央区域的一张牌，可以从左中右中选择一张.")
             self.night_action = '狼人请睁眼，你是唯一的狼人. 请查看中央区域的一张牌，可以从左中右中选择一张.'
             while True:
-                _card_id = input("请输入你要查看的牌的编号: ")
+                _card_id = input(Fore.BLUE + "请输入你要查看的牌的编号: ")
                 try:
                     _card_id = int(_card_id)
                     assert _card_id in [0, 1, 2]
@@ -478,7 +479,7 @@ class PersonPlayer(PlayerBot):
     def seer_action(self, players, center_cards):
         self.log("你是预言家，你可以查看一位玩家或者两张中央区域的牌.")
         while True:
-            _choice = input("请输入你的选择（0:玩家/1:中央区域）: ")
+            _choice = input(Fore.BLUE + "请输入你的选择（0:玩家/1:中央区域）: ")
             try:
                 _choice = int(_choice)
                 assert _choice in [0, 1]
@@ -487,7 +488,7 @@ class PersonPlayer(PlayerBot):
                 self.log("请输入正确的选择.")
         if _choice == 0:
             while True:
-                _player_id = input("请输入你要查看的玩家的编号: ")
+                _player_id = input(Fore.BLUE + "请输入你要查看的玩家的编号: ")
                 try:
                     _player_id = int(_player_id)
                     assert _player_id in range(len(players)) and _player_id != self.player_id
@@ -498,7 +499,7 @@ class PersonPlayer(PlayerBot):
             self.night_action = f'预言家请睁眼，玩家 {_player_id}: {players[_player_id].player_name} 的身份是 {players[_player_id].role}.'
         else:
             while True:
-                _card_id_1 = input("请输入你要查看的第一张牌的编号: ")
+                _card_id_1 = input(Fore.BLUE + "请输入你要查看的第一张牌的编号: ")
                 try:
                     _card_id_1 = int(_card_id_1)
                     assert _card_id_1 in [0, 1, 2]
@@ -510,7 +511,7 @@ class PersonPlayer(PlayerBot):
             self.log(f"第 {_card_id_1 + 1} 张牌是 {center_cards[_card_id_1]}.")
             
             while True:
-                _card_id_2 = input("请输入你要查看的第二张牌的编号: ")
+                _card_id_2 = input(Fore.BLUE + "请输入你要查看的第二张牌的编号: ")
                 try:
                     _card_id_2 = int(_card_id_2)
                     assert _card_id_2 in [0, 1, 2] and _card_id_2 != _card_id_1
@@ -526,7 +527,7 @@ class PersonPlayer(PlayerBot):
     def robber_action(self, players):
         self.log("你是强盗，你可以查看一位玩家的身份，并且和他交换身份. 你也可以选择不交换.")
         while True:
-            _choice = input("请输入你的选择（0:不交换/1:交换）: ")
+            _choice = input(Fore.BLUE + "请输入你的选择（0:不交换/1:交换）: ")
             try:
                 _choice = int(_choice)
                 assert _choice in [0, 1]
@@ -538,7 +539,7 @@ class PersonPlayer(PlayerBot):
             self.night_action = f'强盗请睁眼，你选择了不交换.'
         else:
             while True:
-                _player_id = input("请输入你要交换的玩家的编号: ")
+                _player_id = input(Fore.BLUE + "请输入你要交换的玩家的编号: ")
                 try:
                     _player_id = int(_player_id)
                     assert _player_id in range(len(players)) and _player_id != self.player_id
@@ -553,7 +554,7 @@ class PersonPlayer(PlayerBot):
     def troublemaker_action(self, players):
         self.log("你是捣蛋鬼，你可以选择交换两位其他玩家的身份牌.")
         while True:
-            _player_id_1 = input("请输入你要交换的第一位玩家的编号: ")
+            _player_id_1 = input(Fore.BLUE + "请输入你要交换的第一位玩家的编号: ")
             try:
                 _player_id_1 = int(_player_id_1)
                 assert _player_id_1 in range(len(players)) and _player_id_1 != self.player_id
@@ -561,7 +562,7 @@ class PersonPlayer(PlayerBot):
             except:
                 self.log("请输入正确的编号.")
         while True:
-            _player_id_2 = input("请输入你要交换的第二位玩家的编号: ")
+            _player_id_2 = input(Fore.BLUE + "请输入你要交换的第二位玩家的编号: ")
             try:
                 _player_id_2 = int(_player_id_2)
                 assert _player_id_2 in range(len(players)) and _player_id_2 != self.player_id and _player_id_2 != _player_id_1
@@ -574,7 +575,7 @@ class PersonPlayer(PlayerBot):
     def drunk_action(self, center_cards):
         self.log("你是酒鬼，你可以选择交换自己的身份牌和中央区域的一张牌.")
         while True:
-            _card_id = input("请输入你要交换的牌的编号（0, 1, 2）: ")
+            _card_id = input(Fore.BLUE + "请输入你要交换的牌的编号（0, 1, 2）: ")
             try:
                 _card_id = int(_card_id)
                 assert _card_id in [0, 1, 2]
