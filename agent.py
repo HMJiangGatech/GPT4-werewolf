@@ -8,6 +8,7 @@ BOT_NAMES = [
 TOTAL_ROUNDS = 3
 INCLUDE_PEOPLE = True
 OPENAI_MODEL = "gpt-4"
+# OPENAI_MODEL = "gpt-3.5-turbo"
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 if not OPENAI_API_KEY:
